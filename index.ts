@@ -2,7 +2,6 @@ import { safeLoad } from 'js-yaml'
 import { readFileSync } from 'fs'
 import memdown from 'memdown'
 import { RdfStore } from 'quadstore'
-// import { Parser } from '@rdfjs/parser-jsonld'
 const ParserJsonld = require('@rdfjs/parser-jsonld')
 import { Readable, finished } from 'stream'
 import { promisify } from 'util'
@@ -106,7 +105,37 @@ async function track (iri, level = 0) {
     const outputToProcesses = await outNodes(iri, ns.vf('outputOf'))
     if (outputToProcesses.length) {
       const resources = await outNodes(iri, ns.vf('affects'))
-      for (let resource of resources) await track(resource, level +1)
+      for (let resource of resources) await track(resource, level + 1)
+    }
+  }
+}
+
+async function trace (iri, level = 0) {
+  if (visited.includes(iri)) return
+  visited.push(iri)
+  const types = await outNodes(iri, ns.rdf('type'))
+  if (types.includes(ns.vf('EconomicResource'))) {
+    console.log(pad('📦 ', level), iri)
+    // find events affecting it
+    const events = await inNodes(iri, ns.vf('affects')) 
+    for (let event of events) await trace(event, level + 1)
+  }
+  if (types.includes(ns.vf('Process'))) {
+    console.log(pad('🌀 ', level), iri)
+    // find events
+    const events = await inNodes(iri, ns.vf('inputOf'))
+    for (let event of events) await trace(event, level + 1)
+  }
+  if (types.includes(ns.vf('EconomicEvent'))) {
+    console.log(pad('🔹 ', level), iri)
+    // find processes taking it as output
+    const outputToProcesses = await outNodes(iri, ns.vf('outputOf'))
+    for (let process of outputToProcesses) await trace(process, level + 1)
+    // find affected resources only if process takes it as an input
+    const inputToProcesses = await outNodes(iri, ns.vf('inputOf'))
+    if (inputToProcesses.length) {
+      const resources = await outNodes(iri, ns.vf('affects'))
+      for (let resource of resources) await trace(resource, level +1)
     }
   }
 }
@@ -114,5 +143,10 @@ async function track (iri, level = 0) {
 ;(async () => {
   await done(store.import(output))
   console.log('data imported to store')
-  await track(cli.flags.track)
+  if (cli.flags.track) {
+    await track(cli.flags.track)
+  }
+  if (cli.flags.trace) {
+    await trace(cli.flags.trace)
+  }
 })()
