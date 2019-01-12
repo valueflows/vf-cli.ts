@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+      "target": "esnext",
+      "module": "commonjs",
+      "noImplicitAny": false,
+      "removeComments": true,
+      "preserveConstEnums": true,
+      "experimentalDecorators": true,
+      "sourceMap": false,
+      "moduleResolution": "node",
+      "skipLibCheck": true,
+      "allowSyntheticDefaultImports": true,
+      "outDir": "dist"
+  }
+}
