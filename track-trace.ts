@@ -2,6 +2,7 @@ import { finished } from 'stream'
 import { promisify } from 'util'
 const done = promisify(finished)
 const nn = require('@rdfjs/data-model').namedNode
+const namespace = require('@rdfjs/namespace')
 
 function pad (string, count) {
   let prefix = ''
@@ -12,27 +13,19 @@ function pad (string, count) {
 }
 
 const ns = {
-  vf (term) {
-    return `https://w3id.org/valueflows#${term}`
-  },
-  rdf (term) {
-    return `http://www.w3.org/1999/02/22-rdf-syntax-ns#${term}`
-  }
+  vf: namespace('https://w3id.org/valueflows#'),
+  rdf: namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#')
 }
 
 function subjects (quads) {
-  return quads.map(quad => quad.subject.value)
+  return quads.map(quad => quad.subject)
 }
 
 function objects (quads) {
-  return quads.map(quad => quad.object.value)
+  return quads.map(quad => quad.object)
 }
 
-async function match (store, subject, predicate, object, graph = null) {
-  if (subject) subject = nn(subject)
-  if (predicate) predicate = nn(predicate)
-  if (object) object = nn(object)
-  if (graph) graph = nn(graph)
+async function match (store, subject = null, predicate = null, object = null, graph = null) {
   const results = []
   await done(
     store.match(subject, predicate, object, graph)
@@ -52,61 +45,63 @@ async function inNodes (store, object, predicate) {
 }
 
 const visited = []
-export async function track (store, iri, level = 0) {
-  if (visited.includes(iri)) return
-  visited.push(iri)
-  const types = await outNodes(store, iri, ns.rdf('type'))
-  if (types.includes(ns.vf('EconomicResource'))) {
-    console.log(pad('📦 ', level), iri)
+export async function track (store, current, level = 0) {
+  if (!current.termType) current = nn(current)
+  if (visited.some(node => node.equals(current))) return
+  visited.push(current)
+  const types = await outNodes(store, current, ns.rdf('type'))
+  if (types.some(node => node.equals(ns.vf('EconomicResource')))) {
+    console.log(pad('📦 ', level), current.value)
     // find events affecting it
-    const events = await inNodes(store, iri, ns.vf('affects')) 
+    const events = await inNodes(store, current, ns.vf('affects')) 
     for (let event of events) await track(store, event, level + 1)
   }
-  if (types.includes(ns.vf('Process'))) {
-    console.log(pad('🌀 ', level), iri)
+  if (types.some(node => node.equals(ns.vf('Process')))) {
+    console.log(pad('🌀 ', level), current.value)
     // find events
-    const events = await inNodes(store, iri, ns.vf('outputOf'))
+    const events = await inNodes(store, current, ns.vf('outputOf'))
     for (let event of events) await track(store, event, level + 1)
   }
-  if (types.includes(ns.vf('EconomicEvent'))) {
+  if (types.some(node => node.equals(ns.vf('EconomicEvent')))) {
     // find processes taking it as input
-    const inputToProcesses = await outNodes(store, iri, ns.vf('inputOf'))
-    console.log(pad('🔹 ', level), iri)
+    const inputToProcesses = await outNodes(store, current, ns.vf('inputOf'))
+    console.log(pad('🔹 ', level), current.value)
     for (let process of inputToProcesses) await track(store, process, level + 1)
     // find affected resources only if process takes it as an output
-    const outputToProcesses = await outNodes(store, iri, ns.vf('outputOf'))
+    const outputToProcesses = await outNodes(store, current, ns.vf('outputOf'))
     if (outputToProcesses.length) {
-      const resources = await outNodes(store, iri, ns.vf('affects'))
+      const resources = await outNodes(store, current, ns.vf('affects'))
       for (let resource of resources) await track(store, resource, level + 1)
     }
   }
 }
 
-export async function trace (store, iri, level = 0) {
-  if (visited.includes(iri)) return
-  visited.push(iri)
-  const types = await outNodes(store, iri, ns.rdf('type'))
-  if (types.includes(ns.vf('EconomicResource'))) {
-    console.log(pad('📦 ', level), iri)
+export async function trace (store, current, level = 0) {
+  if (!current.termType) current = nn(current)
+  if (visited.some(node => node.equals(current))) return
+  visited.push(current)
+  const types = await outNodes(store, current, ns.rdf('type'))
+  if (types.some(node => node.equals(ns.vf('EconomicResource')))) {
+    console.log(pad('📦 ', level), current.value)
     // find events affecting it
-    const events = await inNodes(store, iri, ns.vf('affects')) 
+    const events = await inNodes(store, current, ns.vf('affects')) 
     for (let event of events) await trace(store, event, level + 1)
   }
-  if (types.includes(ns.vf('Process'))) {
-    console.log(pad('🌀 ', level), iri)
+  if (types.some(node => node.equals(ns.vf('Process')))) {
+    console.log(pad('🌀 ', level), current.value)
     // find events
-    const events = await inNodes(store, iri, ns.vf('inputOf'))
+    const events = await inNodes(store, current, ns.vf('inputOf'))
     for (let event of events) await trace(store, event, level + 1)
   }
-  if (types.includes(ns.vf('EconomicEvent'))) {
-    console.log(pad('🔹 ', level), iri)
+  if (types.some(node => node.equals(ns.vf('EconomicEvent')))) {
+    console.log(pad('🔹 ', level), current.value)
     // find processes taking it as output
-    const outputToProcesses = await outNodes(store, iri, ns.vf('outputOf'))
+    const outputToProcesses = await outNodes(store, current, ns.vf('outputOf'))
     for (let process of outputToProcesses) await trace(store, process, level + 1)
     // find affected resources only if process takes it as an input
-    const inputToProcesses = await outNodes(store, iri, ns.vf('inputOf'))
+    const inputToProcesses = await outNodes(store, current, ns.vf('inputOf'))
     if (inputToProcesses.length) {
-      const resources = await outNodes(store, iri, ns.vf('affects'))
+      const resources = await outNodes(store, current, ns.vf('affects'))
       for (let resource of resources) await trace(store, resource, level +1)
     }
   }

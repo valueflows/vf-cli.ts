@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@rdfjs/data-model": "^1.1.1",
+    "@rdfjs/namespace": "^1.0.0",
     "@rdfjs/parser-jsonld": "^1.1.1",
     "js-yaml": "^3.12.1",
     "memdown": "^3.0.0",
