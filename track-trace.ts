@@ -4,14 +4,6 @@ const done = promisify(finished)
 const nn = require('@rdfjs/data-model').namedNode
 const namespace = require('@rdfjs/namespace')
 
-function pad (string, count) {
-  let prefix = ''
-  for (let i = 0; i < count; i++) {
-    prefix += ' '
-  }
-  return prefix + string
-}
-
 const ns = {
   vf: namespace('https://w3id.org/valueflows#'),
   rdf: namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#')
@@ -44,65 +36,98 @@ async function inNodes (store, object, predicate) {
   return subjects(await match(store, null, predicate, object))
 }
 
-const visited = []
-export async function track (store, current, level = 0) {
-  if (!current.termType) current = nn(current)
+export async function * track (store, iri) {
+  if (!iri.termType) iri = nn(iri)
+  const visited = []
+  yield * await tracker(store, visited, iri)
+}
+
+async function * tracker (store, visited, current, distance = 0) {
   if (visited.some(node => node.equals(current))) return
   visited.push(current)
   const types = await outNodes(store, current, ns.rdf('type'))
   if (types.some(node => node.equals(ns.vf('EconomicResource')))) {
-    console.log(pad('📦 ', level), current.value)
+    yield {
+      type: ns.vf('EconomicResource'),
+      iri: current.value,
+      distance
+    }
     // find events affecting it
     const events = await inNodes(store, current, ns.vf('affects')) 
-    for (let event of events) await track(store, event, level + 1)
+    for (let event of events) yield * await tracker(store, visited, event, distance + 1)
   }
   if (types.some(node => node.equals(ns.vf('Process')))) {
-    console.log(pad('🌀 ', level), current.value)
+    yield {
+      type: ns.vf('Process'),
+      iri: current.value,
+      distance
+    }
     // find events
     const events = await inNodes(store, current, ns.vf('outputOf'))
-    for (let event of events) await track(store, event, level + 1)
+    for (let event of events) yield * await tracker(store, visited, event, distance + 1)
   }
   if (types.some(node => node.equals(ns.vf('EconomicEvent')))) {
+    yield {
+      type: ns.vf('EconomicEvent'),
+      iri: current.value,
+      distance
+    }
     // find processes taking it as input
     const inputToProcesses = await outNodes(store, current, ns.vf('inputOf'))
-    console.log(pad('🔹 ', level), current.value)
-    for (let process of inputToProcesses) await track(store, process, level + 1)
+    for (let process of inputToProcesses) yield * await tracker(store, visited, process, distance + 1)
     // find affected resources only if process takes it as an output
     const outputToProcesses = await outNodes(store, current, ns.vf('outputOf'))
     if (outputToProcesses.length) {
       const resources = await outNodes(store, current, ns.vf('affects'))
-      for (let resource of resources) await track(store, resource, level + 1)
+      for (let resource of resources) yield * await tracker(store, visited, resource, distance + 1)
     }
   }
 }
 
-export async function trace (store, current, level = 0) {
-  if (!current.termType) current = nn(current)
+export async function * trace (store, iri) {
+  if (!iri.termType) iri = nn(iri)
+  const visited = []
+  yield * await tracer(store, visited, iri)
+}
+
+async function * tracer (store, visited, current, distance = 0) {
   if (visited.some(node => node.equals(current))) return
   visited.push(current)
   const types = await outNodes(store, current, ns.rdf('type'))
   if (types.some(node => node.equals(ns.vf('EconomicResource')))) {
-    console.log(pad('📦 ', level), current.value)
+    yield {
+      type: ns.vf('EconomicResource'),
+      iri: current.value,
+      distance
+    }
     // find events affecting it
     const events = await inNodes(store, current, ns.vf('affects')) 
-    for (let event of events) await trace(store, event, level + 1)
+    for (let event of events) yield * await tracer(store, visited, event, distance + 1)
   }
   if (types.some(node => node.equals(ns.vf('Process')))) {
-    console.log(pad('🌀 ', level), current.value)
+    yield {
+      type: ns.vf('Process'),
+      iri: current.value,
+      distance
+    }
     // find events
     const events = await inNodes(store, current, ns.vf('inputOf'))
-    for (let event of events) await trace(store, event, level + 1)
+    for (let event of events) yield * await tracer(store, visited, event, distance + 1)
   }
   if (types.some(node => node.equals(ns.vf('EconomicEvent')))) {
-    console.log(pad('🔹 ', level), current.value)
+    yield {
+      type: ns.vf('EconomicEvent'),
+      iri: current.value,
+      distance
+    }
     // find processes taking it as output
     const outputToProcesses = await outNodes(store, current, ns.vf('outputOf'))
-    for (let process of outputToProcesses) await trace(store, process, level + 1)
+    for (let process of outputToProcesses) yield * await tracer(store, visited, process, distance + 1)
     // find affected resources only if process takes it as an input
     const inputToProcesses = await outNodes(store, current, ns.vf('inputOf'))
     if (inputToProcesses.length) {
       const resources = await outNodes(store, current, ns.vf('affects'))
-      for (let resource of resources) await trace(store, resource, level +1)
+      for (let resource of resources) yield * await tracer(store, visited, resource, distance +1)
     }
   }
 }
