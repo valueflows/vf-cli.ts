@@ -2,7 +2,8 @@
   "compilerOptions": {
       "target": "esnext",
       "module": "commonjs",
-      "noImplicitAny": false,
+      "strict": true,
+      "strictNullChecks": false,
       "removeComments": true,
       "preserveConstEnums": true,
       "experimentalDecorators": true,
@@ -10,6 +11,9 @@
       "moduleResolution": "node",
       "skipLibCheck": true,
       "allowSyntheticDefaultImports": true,
-      "outDir": "dist"
+      "outDir": "dist",
+      "typeRoots": [
+        "./@types"
+      ]
   }
 }

@@ -9,7 +9,8 @@ import { promisify } from 'util'
 const done = promisify(finished)
 const meow = require('meow')
 
-import { track, trace } from './track-trace'
+import { track, trace } from '@valueflows/track-trace'
+import { ResultNode } from '@valueflows/track-trace'
 
 const cli = meow('', {
   flags: {
@@ -33,7 +34,7 @@ const input = new Readable({
 const parserJsonld = new ParserJsonld()
 const output = parserJsonld.import(input)
 
-function pad (string, count) {
+function pad (string :string, count :number) {
   let prefix = ''
   for (let i = 0; i < count; i++) {
     prefix += ' '
@@ -42,7 +43,7 @@ function pad (string, count) {
 }
 
 const vf = namespace('https://w3id.org/valueflows#')
-function log (node) {
+function log (node :ResultNode) {
   let emoji = '⛔'
   if (node.type.equals(vf('EconomicResource'))) emoji = '📦'
   if (node.type.equals(vf('EconomicEvent'))) emoji = '🔹'
